@@ -6,6 +6,18 @@
     "version": "1.0.0",
     "plugins": [
       "expo-font"
-    ]
+    ],
+    "android": {
+      "permissions": [
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ],
+      "package": "com.yourcompany.esathicompanion"
+    },
+    "ios": {
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "This app needs your location to function properly."
+      }
+    }
   }
 }

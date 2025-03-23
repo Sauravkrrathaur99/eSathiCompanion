@@ -1,4 +1,4 @@
-package com.esathicompanion
+package com.yourcompany.esathicompanion
 
 import android.app.Application
 import android.content.res.Configuration

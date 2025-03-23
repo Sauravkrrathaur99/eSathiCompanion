@@ -12,7 +12,7 @@ const { width, height } = Dimensions.get('window');
 // Microsoft App Details
 const clientId = '68a4e767-34b2-41e5-b4c7-59578dae21b8';
 const tenantId = '1de61f46-fc12-4067-ab1d-147eb7e21025';
-const redirectUri = 'exp://192.168.1.14:8082'; // Update this to match your Expo URL
+const redirectUri = 'exp://192.168.1.2:8081'; // Update this to match your Expo URL
 
 // Discovery Endpoint
 const discovery = {

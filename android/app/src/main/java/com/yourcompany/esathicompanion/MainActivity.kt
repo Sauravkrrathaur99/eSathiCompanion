@@ -1,4 +1,4 @@
-package com.esathicompanion
+package com.yourcompany.esathicompanion
 
 import android.os.Build
 import android.os.Bundle
