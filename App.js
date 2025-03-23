@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { StyleSheet, Dimensions, View, Text } from 'react-native';
+import { StyleSheet, Dimensions, View, Text, AppState, TouchableOpacity } from 'react-native';
 import LoginScreen from './LoginScreen';
 import MainScreen from './MainScreen';
 import HistoryScreen from './HistoryScreen';
@@ -53,6 +53,23 @@ const MainTabNavigator = () => (
 const App = () => {
   const [initialRoute, setInitialRoute] = useState(null);
   const [locationReady, setLocationReady] = useState(false);
+  const [locationEnabled, setLocationEnabled] = useState(true); // Track location enabled state separately
+  const appState = useRef(AppState.currentState);
+  const [appStateVisible, setAppStateVisible] = useState(appState.current);
+  const lastPromptTime = useRef(0); // Track the last time we prompted the user
+
+  // Handle app state changes (foreground/background)
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      appState.current = nextAppState;
+      setAppStateVisible(appState.current);
+      console.log('AppState changed:', appState.current);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   // Check location status on app start
   useEffect(() => {
@@ -106,6 +123,7 @@ const App = () => {
           console.clearErrors && console.clearErrors();
         }
         setLocationReady(true);
+        setLocationEnabled(true);
         try {
           const storedToken = await AsyncStorage.getItem('accessToken');
           console.log('Stored token:', storedToken);
@@ -121,77 +139,112 @@ const App = () => {
     initializeApp();
   }, []);
 
-  // Monitor location status in real-time, but only after location is ready
+  // Monitor location status in real-time, but only when the app is in the foreground
   useEffect(() => {
     let subscription;
+    let pollingInterval;
+    let currentPollingInterval = 3000; // Start with 3 seconds when location is enabled
 
     const monitorLocation = async () => {
       console.log('Starting location monitoring...');
       try {
+        // Use watchPositionAsync for location updates
         subscription = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.Low, timeInterval: 5000 },
           async () => {
-            console.log('Checking location status in monitor...');
-            const isEnabled = await isLocationEnabled();
-            const hasPermission = await checkLocationPermission();
-            console.log('Monitor - Permission:', hasPermission, 'Location Enabled:', isEnabled);
+            console.log('Location update received from watchPositionAsync...');
+          }
+        );
 
-            if (hasPermission && isEnabled) {
-              if (!locationReady) {
-                console.log('Monitor - Location and permission ready, proceeding...');
-                setLocationReady(true);
-                try {
-                  const storedToken = await AsyncStorage.getItem('accessToken');
-                  console.log('Monitor - Stored token:', storedToken);
-                  setInitialRoute(storedToken ? 'MainTab' : 'Login');
-                } catch (error) {
-                  console.error('Monitor - Error checking token in App.js:', error);
-                  setInitialRoute('Login');
-                }
+        // Use polling to check location services status
+        const pollLocationStatus = async () => {
+          if (appState.current !== 'active') {
+            console.log('App is in background, skipping location check...');
+            return;
+          }
+
+          console.log('Polling location status...');
+          const isEnabled = await isLocationEnabled();
+          const hasPermission = await checkLocationPermission();
+          console.log('Poll - Permission:', hasPermission, 'Location Enabled:', isEnabled);
+
+          if (hasPermission && isEnabled) {
+            if (!locationEnabled) {
+              console.log('Poll - Location re-enabled, updating state...');
+              setLocationEnabled(true);
+              // Clear any previous error overlays in development mode
+              if (__DEV__) {
+                console.clearErrors && console.clearErrors();
               }
-            } else {
-              if (!hasPermission) {
-                console.log('Monitor - Permission revoked, requesting again...');
-                const granted = await requestLocationPermission();
-                if (!granted) {
-                  console.log('Monitor - Permission denied, setting locationReady to false...');
-                  setLocationReady(false);
-                  return;
-                }
+            }
+            // Location is enabled, use a longer polling interval
+            if (currentPollingInterval !== 3000) {
+              console.log('Location enabled, switching to 3-second polling interval...');
+              clearInterval(pollingInterval);
+              currentPollingInterval = 3000;
+              pollingInterval = setInterval(pollLocationStatus, currentPollingInterval);
+            }
+          } else {
+            if (!hasPermission) {
+              console.log('Poll - Permission revoked, requesting again...');
+              const granted = await requestLocationPermission();
+              if (!granted) {
+                console.log('Poll - Permission denied, keeping locationReady true to continue monitoring...');
+                return;
+              }
+            }
+
+            if (!isEnabled) {
+              console.log('Poll - Location disabled, switching to 1-second polling interval...');
+              // Location is disabled, use a shorter polling interval
+              if (currentPollingInterval !== 1000) {
+                clearInterval(pollingInterval);
+                currentPollingInterval = 1000;
+                pollingInterval = setInterval(pollLocationStatus, currentPollingInterval);
               }
 
-              if (!isEnabled) {
-                console.log('Monitor - Location disabled, requesting to enable...');
-                try {
-                  const locationEnabled = await requestEnableLocation();
-                  console.log('Monitor - Location enabled after request:', locationEnabled);
-                  if (!locationEnabled) {
-                    console.log('Monitor - Location still not enabled, setting locationReady to false...');
-                    setLocationReady(false);
-                  } else {
-                    // Clear any previous error overlays in development mode
-                    if (__DEV__) {
-                      console.clearErrors && console.clearErrors();
-                    }
+              setLocationEnabled(false); // Update UI to show location disabled message
+
+              // Only prompt if at least 5 seconds have passed since the last prompt
+              const now = Date.now();
+              if (now - lastPromptTime.current < 5000) {
+                console.log('Poll - Skipping prompt, waiting for grace period...');
+                return;
+              }
+
+              try {
+                console.log('Poll - Requesting to enable location...');
+                lastPromptTime.current = now;
+                const locationEnabledResult = await requestEnableLocation();
+                console.log('Poll - Location enabled after request:', locationEnabledResult);
+                if (!locationEnabledResult) {
+                  console.log('Poll - Location still not enabled, will retry on next poll...');
+                } else {
+                  setLocationEnabled(true);
+                  // Clear any previous error overlays in development mode
+                  if (__DEV__) {
+                    console.clearErrors && console.clearErrors();
                   }
-                } catch (error) {
-                  console.log('Monitor - Failed to enable location, retrying on next cycle...');
-                  setLocationReady(false);
                 }
+              } catch (error) {
+                console.log('Poll - Failed to enable location, retrying on next cycle...');
               }
             }
           }
-        );
+        };
+
+        // Start polling
+        pollingInterval = setInterval(pollLocationStatus, currentPollingInterval);
       } catch (error) {
         console.log('Monitor - Failed to start location monitoring, retrying on next cycle...');
       }
     };
 
-    // Only start monitoring if location is ready
-    if (locationReady) {
+    // Start monitoring as long as the app is in the foreground
+    if (appStateVisible === 'active') {
       monitorLocation();
     } else {
-      console.log('Skipping location monitoring until locationReady is true...');
+      console.log('Skipping location monitoring: AppState:', appStateVisible);
     }
 
     return () => {
@@ -199,8 +252,37 @@ const App = () => {
         console.log('Cleaning up location subscription...');
         subscription.remove();
       }
+      if (pollingInterval) {
+        console.log('Cleaning up polling interval...');
+        clearInterval(pollingInterval);
+      }
     };
-  }, [locationReady]);
+  }, [appStateVisible]);
+
+  // Custom screen to show when location is disabled
+  const LocationDisabledScreen = () => (
+    <View style={styles.locationDisabledContainer}>
+      <Text style={styles.locationDisabledText}>
+        Please enable location services to continue using the app.
+      </Text>
+      <TouchableOpacity
+        style={styles.retryButton}
+        onPress={async () => {
+          const now = Date.now();
+          lastPromptTime.current = now; // Update last prompt time to prevent immediate re-prompt from polling
+          const locationEnabledResult = await requestEnableLocation();
+          if (locationEnabledResult) {
+            setLocationEnabled(true);
+            if (__DEV__) {
+              console.clearErrors && console.clearErrors();
+            }
+          }
+        }}
+      >
+        <Text style={styles.retryButtonText}>Enable Location</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   if (!locationReady || initialRoute === null) {
     return (
@@ -208,6 +290,10 @@ const App = () => {
         <Text style={styles.loadingText}>Checking location...</Text>
       </View>
     );
+  }
+
+  if (!locationEnabled) {
+    return <LocationDisabledScreen />;
   }
 
   return (
@@ -249,6 +335,30 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: width * 0.04,
     color: '#FF8C00',
+  },
+  locationDisabledContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    padding: 20,
+  },
+  locationDisabledText: {
+    fontSize: width * 0.05,
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: '#FF8C00',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 5,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: width * 0.04,
+    fontWeight: 'bold',
   },
 });
 
