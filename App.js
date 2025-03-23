@@ -2,13 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { StyleSheet, Dimensions, View, Text, AppState, TouchableOpacity } from 'react-native';
+import { StyleSheet, Dimensions, View, Text, AppState } from 'react-native';
 import LoginScreen from './LoginScreen';
 import MainScreen from './MainScreen';
 import HistoryScreen from './HistoryScreen';
 import UserScreen from './UserScreen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import * as Animatable from 'react-native-animatable'; // Import react-native-animatable
 import { checkLocationStatus, isLocationEnabled, requestLocationPermission, requestEnableLocation, checkLocationPermission } from './locationManager';
 import * as Location from 'expo-location';
 
@@ -54,6 +55,7 @@ const App = () => {
   const [initialRoute, setInitialRoute] = useState(null);
   const [locationReady, setLocationReady] = useState(false);
   const [locationEnabled, setLocationEnabled] = useState(true); // Track location enabled state separately
+  const [isRedirecting, setIsRedirecting] = useState(false); // Track redirecting state
   const appState = useRef(AppState.currentState);
   const [appStateVisible, setAppStateVisible] = useState(appState.current);
   const lastPromptTime = useRef(0); // Track the last time we prompted the user
@@ -171,11 +173,15 @@ const App = () => {
           if (hasPermission && isEnabled) {
             if (!locationEnabled) {
               console.log('Poll - Location re-enabled, updating state...');
-              setLocationEnabled(true);
-              // Clear any previous error overlays in development mode
-              if (__DEV__) {
-                console.clearErrors && console.clearErrors();
-              }
+              setIsRedirecting(true); // Show redirecting message
+              setTimeout(() => {
+                setIsRedirecting(false);
+                setLocationEnabled(true);
+                // Clear any previous error overlays in development mode
+                if (__DEV__) {
+                  console.clearErrors && console.clearErrors();
+                }
+              }, 2000); // Show redirecting message for 2 seconds
             }
             // Location is enabled, use a longer polling interval
             if (currentPollingInterval !== 3000) {
@@ -220,11 +226,15 @@ const App = () => {
                 if (!locationEnabledResult) {
                   console.log('Poll - Location still not enabled, will retry on next poll...');
                 } else {
-                  setLocationEnabled(true);
-                  // Clear any previous error overlays in development mode
-                  if (__DEV__) {
-                    console.clearErrors && console.clearErrors();
-                  }
+                  setIsRedirecting(true); // Show redirecting message
+                  setTimeout(() => {
+                    setIsRedirecting(false);
+                    setLocationEnabled(true);
+                    // Clear any previous error overlays in development mode
+                    if (__DEV__) {
+                      console.clearErrors && console.clearErrors();
+                    }
+                  }, 2000); // Show redirecting message for 2 seconds
                 }
               } catch (error) {
                 console.log('Poll - Failed to enable location, retrying on next cycle...');
@@ -262,25 +272,30 @@ const App = () => {
   // Custom screen to show when location is disabled
   const LocationDisabledScreen = () => (
     <View style={styles.locationDisabledContainer}>
-      <Text style={styles.locationDisabledText}>
-        Please enable location services to continue using the app.
-      </Text>
-      <TouchableOpacity
-        style={styles.retryButton}
-        onPress={async () => {
-          const now = Date.now();
-          lastPromptTime.current = now; // Update last prompt time to prevent immediate re-prompt from polling
-          const locationEnabledResult = await requestEnableLocation();
-          if (locationEnabledResult) {
-            setLocationEnabled(true);
-            if (__DEV__) {
-              console.clearErrors && console.clearErrors();
-            }
-          }
-        }}
-      >
-        <Text style={styles.retryButtonText}>Enable Location</Text>
-      </TouchableOpacity>
+      {isRedirecting ? (
+        <>
+          <Text style={styles.redirectingText}>Redirecting to your Home</Text>
+          <Animatable.View
+            animation={{
+              0: { opacity: 0, scale: 0.5 },
+              0.5: { opacity: 1, scale: 1.2 },
+              1: { opacity: 1, scale: 1 },
+            }}
+            iterationCount="infinite"
+            duration={1500}
+            style={styles.animatedIconContainer}
+          >
+            <Ionicons name="home" size={width * 0.1} color="#FF8C00" />
+          </Animatable.View>
+        </>
+      ) : (
+        <>
+          <MaterialIcons name="location-off" size={width * 0.15} color="#FF4444" style={styles.warningIcon} />
+          <Text style={styles.locationDisabledText}>
+            Please enable location services to continue using the app.
+          </Text>
+        </>
+      )}
     </View>
   );
 
@@ -347,18 +362,20 @@ const styles = StyleSheet.create({
     fontSize: width * 0.05,
     color: '#333',
     textAlign: 'center',
+    marginTop: 20,
+  },
+  warningIcon: {
+    marginBottom: 10,
+  },
+  redirectingText: {
+    fontSize: width * 0.05,
+    color: '#FF8C00',
+    textAlign: 'center',
+    fontWeight: 'bold',
     marginBottom: 20,
   },
-  retryButton: {
-    backgroundColor: '#FF8C00',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 5,
-  },
-  retryButtonText: {
-    color: '#FFFFFF',
-    fontSize: width * 0.04,
-    fontWeight: 'bold',
+  animatedIconContainer: {
+    marginTop: 10,
   },
 });
 
