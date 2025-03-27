@@ -1,39 +1,39 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Dimensions, SafeAreaView, StatusBar, ScrollView, Image } from 'react-native'; // Ensure Image and Text are imported
+import { StyleSheet, Text, View, TouchableOpacity, Dimensions, SafeAreaView, StatusBar, ScrollView, Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Ionicons } from '@expo/vector-icons'; // Import Ionicons for the timer icon
+import { Ionicons } from '@expo/vector-icons';
 
 const { width, height } = Dimensions.get('window');
 
-export default function MainScreen() {
-  const [userName, setUserName] = useState(null); // Initialize as null to track undefined/empty states
-  const [isLoading, setIsLoading] = useState(true); // Add loading state
+export default function MainScreen({ internetStatus }) { // Receive internetStatus as a prop
+  const [userName, setUserName] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const loadUserName = async () => {
       try {
         const storedName = await AsyncStorage.getItem('userName');
-        console.log('Loaded userName from AsyncStorage:', storedName || 'null/undefined'); // Debug log with fallback
-        setUserName(storedName ? storedName.trim() : 'User'); // Trim and use default 'User' if empty or null
+        console.log('Loaded userName from AsyncStorage:', storedName || 'null/undefined');
+        setUserName(storedName ? storedName.trim() : 'User');
       } catch (error) {
         console.error('Error loading user name:', error);
-        setUserName('User'); // Fallback, wrapped in Text if rendered
+        setUserName('User');
       } finally {
-        setIsLoading(false); // Set loading to false when done
+        setIsLoading(false);
       }
     };
     loadUserName();
   }, []);
 
   useEffect(() => {
-    console.log('Rendering MainScreen with userName:', userName ? userName : 'null/undefined'); // Debug log for rendering
-  }, [userName]); // Log whenever userName changes
+    console.log('Rendering MainScreen with userName:', userName ? userName : 'null/undefined');
+  }, [userName]);
 
   const actions = [
-    { id: '1', title: 'Action 1', icon: require('./assets/images/set_location_attendance.png') }, // Updated path
-    { id: '2', title: 'Action 2', icon: require('./assets/images/set_location_attendance.png') }, // Update with your actual icon
-    { id: '3', title: 'Action 3', icon: require('./assets/images/set_location_attendance.png') }, // Update with your actual icon
-    { id: '4', title: 'Action 4', icon: require('./assets/images/set_location_attendance.png') }, // Update with your actual icon
+    { id: '1', title: 'Action 1', icon: require('./assets/images/set_location_attendance.png') },
+    { id: '2', title: 'Action 2', icon: require('./assets/images/set_location_attendance.png') },
+    { id: '3', title: 'Action 3', icon: require('./assets/images/set_location_attendance.png') },
+    { id: '4', title: 'Action 4', icon: require('./assets/images/set_location_attendance.png') },
   ];
 
   if (isLoading) {
@@ -54,36 +54,32 @@ export default function MainScreen() {
       <StatusBar barStyle="dark-content" backgroundColor="#F5F5F5" />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
         <View style={styles.container}>
-          
           <View style={styles.header}>
             <Text style={styles.welcomeText}>
               {userName && userName.trim() ? `Welcome, ${userName.trim()}` : 'Welcome, User'}
             </Text>
             <Image
-              source={require('./assets/images/image_checkincheckout_home.png')} // Updated path
+              source={require('./assets/images/image_checkincheckout_home.png')}
               style={styles.illustration}
             />
           </View>
 
-          
-          <View style={[styles.infoContainer, { marginTop: -height * 0.02 }]}> 
+          <View style={[styles.infoContainer, { marginTop: -height * 0.02 }]}>
             <View style={styles.infoRow}>
               <Text style={styles.dateText}>Mon, Dec 16, 2024</Text>
               <View style={styles.timerIconContainer}>
-                <Ionicons name="time" size={width * 0.06} color="#2C3E50" /> 
+                <Ionicons name="time" size={width * 0.06} color="#2C3E50" />
               </View>
               <Text style={styles.workTimeText}>00:49:51</Text>
             </View>
           </View>
 
-         
-          <View style={[styles.InternetinfoContainer, { marginTop: height * 0.001 }]}> 
+          <View style={[styles.InternetinfoContainer, { marginTop: height * 0.001 }]}>
             <View style={styles.InternetinfoRow}>
-              <Text style={styles.internetStatus}>Connected via WiFi</Text>
+              <Text style={styles.internetStatus}>{internetStatus}</Text>
             </View>
           </View>
 
-         
           <View style={styles.actionsContainer}>
             {actions.map((action) => (
               <TouchableOpacity key={action.id} style={styles.actionButton}>
@@ -101,20 +97,20 @@ export default function MainScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F5F5F5', // Light background for a modern look
+    backgroundColor: '#F5F5F5',
   },
   scrollView: {
     flex: 1,
   },
   contentContainer: {
-    flexGrow: 1, // Ensures content can expand and scroll
+    flexGrow: 1,
   },
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
   },
   header: {
-    backgroundColor: '#0f1c3e', // Dark blue-gray for a professional header
+    backgroundColor: '#0f1c3e',
     paddingVertical: height * 0.02,
     paddingHorizontal: width * 0.05,
     borderBottomLeftRadius: 5,
@@ -122,92 +118,92 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   welcomeText: {
-    fontSize: width * 0.04, // Professional, modern font size
+    fontSize: width * 0.04,
     fontWeight: '600',
     color: '#FFFFFF',
     marginBottom: height * 0.01,
     textAlign: 'center',
     fontFamily: 'sans-serif',
-    textShadowColor: 'rgba(0, 0, 0, 0.2)', // Subtle black shadow for modern look
-    textShadowOffset: { width: 1, height: 1 }, // Small offset for shadow
-    textShadowRadius: 2, // Soft shadow blur
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
   illustration: {
-    width: width * 0.9, // Responsive illustration size
+    width: width * 0.9,
     height: width * 0.5,
     resizeMode: 'contain',
   },
   infoContainer: {
     backgroundColor: '#FFFFFF',
-    paddingVertical: height * 0.01, // Adjusted for tighter vertical spacing
+    paddingVertical: height * 0.01,
     paddingHorizontal: width * 0.04,
-    borderRadius: 10, // Capsule shape with larger radius for cylindrical look
-    width: width * 0.9, // Narrower width (90% of screen width, adjustable)
-    alignSelf: 'center', // Center the capsule horizontally
-    elevation: 4, // Subtle shadow for modern look
+    borderRadius: 10,
+    width: width * 0.9,
+    alignSelf: 'center',
+    elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 1,
-    marginTop: height * 0.01, // Default margin, overridden in render for overlap
+    marginTop: height * 0.01,
   },
   InternetinfoContainer: {
-    backgroundColor: 'transparent', // Set to transparent to show only the text
-    paddingVertical: height * 0.01, // Adjusted for tighter vertical spacing
+    backgroundColor: 'transparent',
+    paddingVertical: height * 0.01,
     paddingHorizontal: width * 0.04,
-    borderRadius: 10, // Maintain capsule shape for consistency
-    width: width * 0.9, // Narrower width (90% of screen width, adjustable)
-    alignSelf: 'center', // Center the capsule horizontally
-    elevation: 0, // Remove shadow for transparency
-    shadowColor: 'transparent', // Remove shadow for transparency
+    borderRadius: 10,
+    width: width * 0.9,
+    alignSelf: 'center',
+    elevation: 0,
+    shadowColor: 'transparent',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0,
     shadowRadius: 0,
-    marginTop: height * 0.01, // Default margin, overridden in render for overlap
+    marginTop: height * 0.01,
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between', // Distributes items across the row (left, center, right)
+    justifyContent: 'space-between',
   },
   InternetinfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center', // Center the text horizontally
+    justifyContent: 'center',
   },
   dateText: {
     fontSize: width * 0.04,
     color: '#2C3E50',
     fontWeight: '700',
-    flex: 1, // Allows text to take available space on the left
+    flex: 1,
     textAlign: 'left',
-    textShadowColor: 'rgba(0, 0, 0, 0.2)', // Subtle black shadow for modern look
-    textShadowOffset: { width: 1, height: 1 }, // Small offset for shadow
-    textShadowRadius: 2, // Soft shadow blur
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
   internetStatus: {
     fontSize: width * 0.04,
     color: '#2C3E50',
     fontWeight: '700',
-    textAlign: 'center', // Center the text within the Text component
-    textShadowColor: 'rgba(0, 0, 0, 0.3)', // Subtle black shadow for modern look
-    textShadowOffset: { width: 1, height: 1 }, // Small offset for shadow
-    textShadowRadius: 2, // Soft shadow blur
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
   timerIconContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 0, // Prevents the icon from stretching
+    flex: 0,
   },
   workTimeText: {
     fontSize: width * 0.04,
     color: 'orange',
-    flex: 1, // Allows text to take available space on the right
+    flex: 1,
     textAlign: 'right',
     fontWeight: '700',
-    textShadowColor: 'rgba(0, 0, 0, 0.2)', // Subtle black shadow for modern look
-    textShadowOffset: { width: 1, height: 1 }, // Small offset for shadow
-    textShadowRadius: 2, // Soft shadow blur
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
   actionsContainer: {
     flexDirection: 'row',
@@ -222,7 +218,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: width * 0.03,
     marginBottom: height * 0.02,
-    width: width * 0.4, // Responsive width for two columns
+    width: width * 0.4,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -230,7 +226,7 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
   },
   actionIcon: {
-    width: width * 0.15, // Responsive icon size
+    width: width * 0.15,
     height: width * 0.15,
     marginBottom: height * 0.01,
   },
@@ -239,9 +235,9 @@ const styles = StyleSheet.create({
     color: '#2C3E50',
     fontWeight: '500',
     textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.2)', // Subtle black shadow for modern look
-    textShadowOffset: { width: 1, height: 1 }, // Small offset for shadow
-    textShadowRadius: 2, // Soft shadow blur
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
   loading: {
     fontSize: width * 0.04,

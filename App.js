@@ -9,16 +9,17 @@ import HistoryScreen from './HistoryScreen';
 import UserScreen from './UserScreen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import * as Animatable from 'react-native-animatable'; // Import react-native-animatable
+import * as Animatable from 'react-native-animatable';
 import { checkLocationStatus, isLocationEnabled, requestLocationPermission, requestEnableLocation, checkLocationPermission } from './locationManager';
 import * as Location from 'expo-location';
+import NetInfo from '@react-native-community/netinfo'; // Import NetInfo for internet connectivity
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
 const { width, height } = Dimensions.get('window');
 
-const MainTabNavigator = () => (
+const MainTabNavigator = ({ internetStatus }) => (
   <Tab.Navigator
     initialRouteName="Home"
     screenOptions={({ route }) => ({
@@ -46,7 +47,10 @@ const MainTabNavigator = () => (
     })}
   >
     <Tab.Screen name="History" component={HistoryScreen} />
-    <Tab.Screen name="Home" component={MainScreen} />
+    <Tab.Screen
+      name="Home"
+      children={() => <MainScreen internetStatus={internetStatus} />}
+    />
     <Tab.Screen name="User" component={UserScreen} />
   </Tab.Navigator>
 );
@@ -54,11 +58,12 @@ const MainTabNavigator = () => (
 const App = () => {
   const [initialRoute, setInitialRoute] = useState(null);
   const [locationReady, setLocationReady] = useState(false);
-  const [locationEnabled, setLocationEnabled] = useState(true); // Track location enabled state separately
-  const [isRedirecting, setIsRedirecting] = useState(false); // Track redirecting state
+  const [locationEnabled, setLocationEnabled] = useState(true);
+  const [isRedirecting, setIsRedirecting] = useState(false);
   const appState = useRef(AppState.currentState);
   const [appStateVisible, setAppStateVisible] = useState(appState.current);
-  const lastPromptTime = useRef(0); // Track the last time we prompted the user
+  const lastPromptTime = useRef(0);
+  const [internetStatus, setInternetStatus] = useState('Checking...'); // Track internet status
 
   // Handle app state changes (foreground/background)
   useEffect(() => {
@@ -81,9 +86,7 @@ const App = () => {
         let hasPermission = false;
         let locationEnabled = false;
 
-        // Keep asking for permission and location until both are granted
         while (!hasPermission || !locationEnabled) {
-          // Step 1: Request location permission (Android system dialog)
           if (!hasPermission) {
             console.log('Checking initial permission status...');
             hasPermission = await checkLocationPermission();
@@ -100,7 +103,6 @@ const App = () => {
             }
           }
 
-          // Step 2: Check if location services are enabled
           if (!locationEnabled) {
             console.log('Checking if location services are enabled...');
             locationEnabled = await isLocationEnabled();
@@ -118,9 +120,7 @@ const App = () => {
           }
         }
 
-        // If both permission and location are enabled, proceed
         console.log('Location and permission ready, proceeding...');
-        // Clear any previous error overlays in development mode
         if (__DEV__) {
           console.clearErrors && console.clearErrors();
         }
@@ -141,22 +141,53 @@ const App = () => {
     initializeApp();
   }, []);
 
-  // Monitor location status in real-time, but only when the app is in the foreground
+  // Monitor location and internet connectivity in real-time
   useEffect(() => {
     let subscription;
     let pollingInterval;
-    let currentPollingInterval = 3000; // Start with 3 seconds when location is enabled
+    let currentPollingInterval = 3000;
+    let netInfoUnsubscribe;
 
-    const monitorLocation = async () => {
-      console.log('Starting location monitoring...');
+    const monitorLocationAndInternet = async () => {
+      console.log('Starting location and internet monitoring...');
       try {
-        // Use watchPositionAsync for location updates
+        // Monitor location
         subscription = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.Low, timeInterval: 5000 },
           async () => {
             console.log('Location update received from watchPositionAsync...');
           }
         );
+
+        // Monitor internet connectivity
+        netInfoUnsubscribe = NetInfo.addEventListener(state => {
+          console.log('Network state changed:', state);
+          if (state.isConnected) {
+            if (state.type === 'wifi') {
+              setInternetStatus('Connected via WiFi');
+            } else if (state.type === 'cellular') {
+              setInternetStatus('Connected via Mobile Data');
+            } else {
+              setInternetStatus('Connected (Unknown Network)');
+            }
+          } else {
+            setInternetStatus('No Internet Connection');
+          }
+        });
+
+        // Initial internet status check
+        const initialState = await NetInfo.fetch();
+        if (initialState.isConnected) {
+          if (initialState.type === 'wifi') {
+            setInternetStatus('Connected via WiFi');
+          } else if (initialState.type === 'cellular') {
+            setInternetStatus('Connected via Mobile Data');
+          } else {
+            setInternetStatus('Connected (Unknown Network)');
+          }
+        } else {
+          setInternetStatus('No Internet Connection');
+        }
 
         // Use polling to check location services status
         const pollLocationStatus = async () => {
@@ -173,17 +204,15 @@ const App = () => {
           if (hasPermission && isEnabled) {
             if (!locationEnabled) {
               console.log('Poll - Location re-enabled, updating state...');
-              setIsRedirecting(true); // Show redirecting message
+              setIsRedirecting(true);
               setTimeout(() => {
                 setIsRedirecting(false);
                 setLocationEnabled(true);
-                // Clear any previous error overlays in development mode
                 if (__DEV__) {
                   console.clearErrors && console.clearErrors();
                 }
-              }, 2000); // Show redirecting message for 2 seconds
+              }, 2000);
             }
-            // Location is enabled, use a longer polling interval
             if (currentPollingInterval !== 3000) {
               console.log('Location enabled, switching to 3-second polling interval...');
               clearInterval(pollingInterval);
@@ -202,16 +231,14 @@ const App = () => {
 
             if (!isEnabled) {
               console.log('Poll - Location disabled, switching to 1-second polling interval...');
-              // Location is disabled, use a shorter polling interval
               if (currentPollingInterval !== 1000) {
                 clearInterval(pollingInterval);
                 currentPollingInterval = 1000;
                 pollingInterval = setInterval(pollLocationStatus, currentPollingInterval);
               }
 
-              setLocationEnabled(false); // Update UI to show location disabled message
+              setLocationEnabled(false);
 
-              // Only prompt if at least 5 seconds have passed since the last prompt
               const now = Date.now();
               if (now - lastPromptTime.current < 5000) {
                 console.log('Poll - Skipping prompt, waiting for grace period...');
@@ -226,15 +253,14 @@ const App = () => {
                 if (!locationEnabledResult) {
                   console.log('Poll - Location still not enabled, will retry on next poll...');
                 } else {
-                  setIsRedirecting(true); // Show redirecting message
+                  setIsRedirecting(true);
                   setTimeout(() => {
                     setIsRedirecting(false);
                     setLocationEnabled(true);
-                    // Clear any previous error overlays in development mode
                     if (__DEV__) {
                       console.clearErrors && console.clearErrors();
                     }
-                  }, 2000); // Show redirecting message for 2 seconds
+                  }, 2000);
                 }
               } catch (error) {
                 console.log('Poll - Failed to enable location, retrying on next cycle...');
@@ -243,18 +269,16 @@ const App = () => {
           }
         };
 
-        // Start polling
         pollingInterval = setInterval(pollLocationStatus, currentPollingInterval);
       } catch (error) {
         console.log('Monitor - Failed to start location monitoring, retrying on next cycle...');
       }
     };
 
-    // Start monitoring as long as the app is in the foreground
     if (appStateVisible === 'active') {
-      monitorLocation();
+      monitorLocationAndInternet();
     } else {
-      console.log('Skipping location monitoring: AppState:', appStateVisible);
+      console.log('Skipping location and internet monitoring: AppState:', appStateVisible);
     }
 
     return () => {
@@ -266,10 +290,13 @@ const App = () => {
         console.log('Cleaning up polling interval...');
         clearInterval(pollingInterval);
       }
+      if (netInfoUnsubscribe) {
+        console.log('Cleaning up NetInfo subscription...');
+        netInfoUnsubscribe();
+      }
     };
   }, [appStateVisible]);
 
-  // Custom screen to show when location is disabled
   const LocationDisabledScreen = () => (
     <View style={styles.locationDisabledContainer}>
       {isRedirecting ? (
@@ -315,7 +342,11 @@ const App = () => {
     <NavigationContainer>
       <Stack.Navigator initialRouteName={initialRoute}>
         <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="MainTab" component={MainTabNavigator} options={{ headerShown: false }} />
+        <Stack.Screen
+          name="MainTab"
+          children={() => <MainTabNavigator internetStatus={internetStatus} />}
+          options={{ headerShown: false }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );
